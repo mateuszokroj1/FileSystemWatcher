@@ -7,7 +7,7 @@ namespace FileSystemWatcher.Models
     public enum Actions
     {
         Created,
-        Changed,
+        Modified,
         Renamed,
         Deleted
     }
