@@ -15,7 +15,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
-        <ListView ItemsSource="{Binding Paths}">
+        <ListView ItemsSource="{Binding Locations}">
             <ListView.View>
                 <GridView>
                     <GridViewColumn Header="Path" Width="200" DisplayMemberBinding="{Binding}" />

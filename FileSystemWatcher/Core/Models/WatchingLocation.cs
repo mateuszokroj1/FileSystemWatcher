@@ -94,6 +94,8 @@ namespace FileSystemWatcher.Models
             });
         }
 
+        public override string ToString() => Path;
+
         public void Dispose()
         {
             foreach (var unsubscriber in this.unsubscribers)

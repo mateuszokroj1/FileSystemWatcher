@@ -1,75 +1,52 @@
-﻿using FileSystemWatcher.Commands;
-using FileSystemWatcher.Models;
-using System;
-using System.Collections.Generic;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Windows;
+using FileSystemWatcher.Models;
+using Microsoft.WindowsAPICodePack.Dialogs;
+using Microsoft.WindowsAPICodePack.Shell;
 
 namespace FileSystemWatcher.UI.ViewModels
 {
-    public class MainWindowViewModel : INotifyPropertyChanged
+    public class MainWindowViewModel
     {
-        #region Fields
-
-        public event PropertyChangedEventHandler PropertyChanged;
-        private string locationToAdd;
-        private WatchingLocation selectedLocation;
-
-        #endregion
-
         #region Constructors
 
         public MainWindowViewModel()
         {
-            Locations = new ObservableCollection<WatchingLocation>();
-            History = new ObservableCollection<HistoryItem>();
-
             ClearHistoryCommand = new Command(() => History.Clear());
+            SelectLocationCommand = new Command(() => SelectLocation());
 
-            AddLocationCommand = new ReactiveCommand()
+            LocationToAdd = new ReactiveProperty<string>();
+            IncludeSubdirectories = new ReactiveProperty<bool>(false);
+            SelectedLocation = new ReactiveProperty<WatchingLocation>();
+
+            AddLocationCommand = new ReactiveCommand();
+            RemoveLocationCommand = new ReactiveCommand();
         }
 
         #endregion
 
         #region Properties
 
-        public ObservableCollection<WatchingLocation> Locations { get; }
+        public ObservableCollection<WatchingLocation> Locations { get; } = new ObservableCollection<WatchingLocation>();
 
-        public string LocationToAdd
-        {
-            get => this.locationToAdd;
-            set
-            {
-                if(this.locationToAdd != value)
-                {
-                    this.locationToAdd = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(LocationToAdd)));
-                }
-            }
-        }
+        public ObservableCollection<HistoryItem> History { get; } = new ObservableCollection<HistoryItem>();
 
-        public WatchingLocation SelectedLocation
-        {
-            get => this.selectedLocation;
-            set
-            {
-                if(this.selectedLocation != value)
-                {
-                    this.selectedLocation = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SelectedLocation)));
-                }
-            }
-        }
+        public ReactiveProperty<string> LocationToAdd { get; set; }
 
-        public ObservableCollection<HistoryItem> History { get; }
+        public ReactiveProperty<bool> IncludeSubdirectories { get; set; }
+
+        public ReactiveProperty<WatchingLocation> SelectedLocation { get; set; }
 
         public ReactiveCommand AddLocationCommand { get; }
 
         public ReactiveCommand RemoveLocationCommand { get; }
+
+        public Command SelectLocationCommand { get; }
 
         public Command ClearHistoryCommand { get; }
 
@@ -79,13 +56,64 @@ namespace FileSystemWatcher.UI.ViewModels
 
         public void AddLocation()
         {
+            if (!LocationCanBeAdd(LocationToAdd.Value))
+                return;
 
+            var location = new WatchingLocation(LocationToAdd.Value, IncludeSubdirectories.Value, History);
+            location.Error += (sender, e) => OnWatcherError(sender as WatchingLocation, e.GetException());
+
+            Locations.Add(location);
+
+            LocationToAdd.Value = null;
+            IncludeSubdirectories.Value = false;
+        }
+
+        public void SelectLocation()
+        {
+            var dialog = new CommonOpenFileDialog()
+            {
+                IsFolderPicker = true,
+                AllowNonFileSystemItems = false,
+                AllowPropertyEditing = false,
+                DefaultDirectoryShellContainer = ShellFileSystemFolder.FromFolderPath(Environment.GetFolderPath(Environment.SpecialFolder.Desktop)),
+                EnsurePathExists = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+                Multiselect = false,
+                NavigateToShortcut = true,
+                ShowPlacesList = true,
+                Title = "Select path to watch"
+            };
+
+            if (dialog.ShowDialog() != CommonFileDialogResult.Ok)
+                return;
+
+            LocationToAdd.Value = dialog.FileName;
+        }
+
+        public void OnWatcherError(WatchingLocation location, Exception e)
+        {
+            var message = new StringBuilder();
+
+            message.AppendLine(location != null ? $"Cannot continue watching on location: '{location.Path}'." : "Cannot continue watching.");
+
+            if (e != null)
+            {
+                message.AppendLine(e.GetType().FullName);
+                message.Append(e.StackTrace);
+            }
+
+            MessageBox.Show(message.ToString(), "File System Watcher", MessageBoxButton.OK, MessageBoxImage.Warning);
+
+            if (location != null && Locations.Contains(location))
+                Locations.Remove(location);
         }
 
         public void RemoveLocation()
         {
             if (SelectedLocation == null)
                 return;
+
+            Locations.Remove(SelectedLocation);
         }
 
         private bool LocationIsAdded(string location) =>
